@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>Мой день</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a daily logbook — one day's sheet of sphere cards, plus overview, money and tasks views; bottom tab bar on phones, top bar on desktop */
+:root{
+  --bg:#f2f4f7; --surface:#ffffff; --surface-2:#e9ecf2; --ink:#151924; --muted:#5b6274; --line:#dbdfe7;
+  --accent:#2a55c9; --accent-ink:#ffffff; --accent-soft:#e2e8f9;
+  --c-sleep:#4b55c8; --c-mood:#b97c08; --c-habit:#2a55c9; --c-sport:#1d8456; --c-study:#8448c2; --c-health:#c23f66; --c-money:#0d7a86; --c-task:#4b5568;
+  --good:#1d8456; --warn:#b26f12; --bad:#c2352f;
+  --f-display:"Unbounded","Onest",system-ui,sans-serif;
+  --f-body:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:14px; --r-s:9px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1117; --surface:#161a23; --surface-2:#202533; --ink:#e7e9ef; --muted:#9aa1b3; --line:#2a3040;
+  --accent:#86a0f6; --accent-ink:#0e1117; --accent-soft:#1e2846;
+  --c-sleep:#8f96f2; --c-mood:#e6b33f; --c-habit:#86a0f6; --c-sport:#4cc38a; --c-study:#ba8cea; --c-health:#ee7e9e; --c-money:#43c2d0; --c-task:#a3abbd;
+  --good:#4cc38a; --warn:#e6a94a; --bad:#f07a73; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0e1117; --surface:#161a23; --surface-2:#202533; --ink:#e7e9ef; --muted:#9aa1b3; --line:#2a3040;
+  --accent:#86a0f6; --accent-ink:#0e1117; --accent-soft:#1e2846;
+  --c-sleep:#8f96f2; --c-mood:#e6b33f; --c-habit:#86a0f6; --c-sport:#4cc38a; --c-study:#ba8cea; --c-health:#ee7e9e; --c-money:#43c2d0; --c-task:#a3abbd;
+  --good:#4cc38a; --warn:#e6a94a; --bad:#f07a73; color-scheme:dark }
+
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.top .wrap{display:flex;align-items:center;gap:16px;padding-block:10px}
+.logo{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:-.01em;white-space:nowrap}
+.logo span{color:var(--accent)}
+nav.tabs{display:flex;gap:4px;margin-left:auto}
+nav.tabs button{border:0;background:none;padding:8px 12px;border-radius:999px;cursor:pointer;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
+nav.tabs button svg{width:18px;height:18px;flex:none}
+nav.tabs button[aria-current="page"]{background:var(--accent-soft);color:var(--ink)}
+nav.tabs button:hover{color:var(--ink)}
+.store-pill{font-size:12px;color:var(--muted);white-space:nowrap}
+
+main{padding-block:18px 40px}
+@media (max-width:720px){
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);
+    justify-content:space-around;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  nav.tabs button{flex-direction:column;gap:2px;font-size:11px;padding:6px 8px;border-radius:10px;flex:1;max-width:90px}
+  nav.tabs button svg{width:20px;height:20px}
+  main{padding-bottom:96px}
+  .store-pill{margin-left:auto}
+}
+
+h1,h2,h3{margin:0;text-wrap:balance}
+.eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* Day header */
+.dayhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.daynav{display:flex;align-items:center;gap:8px;margin-left:auto}
+.dayhead h1{flex:1 1 260px;font-family:var(--f-display);font-weight:500;font-size:clamp(20px,4.4vw,28px);letter-spacing:-.015em}
+.dayhead h1::first-letter{text-transform:uppercase}
+.iconbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;display:grid;place-items:center;flex:none}
+.iconbtn:hover{border-color:var(--muted)}
+.iconbtn svg{width:18px;height:18px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ghost{background:none}
+.btn:disabled{opacity:.5;cursor:default}
+
+.progress{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.dot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:4px 10px 4px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.dot i{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.dot.on{color:var(--ink)}
+.dot.on i{background:var(--c)}
+
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.grid > .full{grid-column:1/-1}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-h{display:flex;align-items:center;gap:10px}
+.card-h .badge{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c);flex:none}
+.card-h .badge svg{width:17px;height:17px}
+.card-h h2{font-size:16px;font-weight:600}
+.card-h .aside{margin-left:auto;font-size:13px;color:var(--muted)}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 110px}
+.field > span{font-size:12.5px;color:var(--muted)}
+input[type=text],input[type=number],input[type=time],input[type=date],select,textarea{
+  width:100%;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-s);padding:8px 10px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:72px}
+.big{font-family:var(--f-num);font-size:26px;font-weight:500;letter-spacing:-.02em}
+.big small{font-family:var(--f-body);font-size:13px;color:var(--muted);font-weight:400;margin-left:4px;letter-spacing:0}
+
+.seg-wrap{display:flex;flex-direction:column;gap:5px}
+.seg-wrap > span{font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 0;cursor:pointer;font-family:var(--f-num);font-size:14px}
+.seg button:hover{border-color:var(--muted)}
+.seg button.on{background:var(--c);border-color:var(--c);color:var(--surface)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-align:left}
+.chip .box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--muted);display:grid;place-items:center;flex:none}
+.chip.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,var(--surface))}
+.chip.on .box{background:var(--c);border-color:var(--c)}
+.chip.on .box::after{content:"";width:7px;height:4px;border:2px solid var(--surface);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.chip small{color:var(--muted);font-family:var(--f-num);font-size:11.5px}
+
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+.li:first-child{border-top:0}
+.li .t{flex:1;min-width:0;overflow-wrap:anywhere}
+.li .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none}
+.x:hover{background:var(--surface-2);color:var(--bad)}
+.x svg{width:14px;height:14px}
+.empty{color:var(--muted);font-size:13.5px}
+
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:17px;line-height:1}
+.glasses{display:flex;gap:3px;flex-wrap:wrap}
+.glasses i{width:9px;height:16px;border-radius:2px 2px 4px 4px;border:1.5px solid var(--c-health);opacity:.45}
+.glasses i.f{background:var(--c-health);opacity:1}
+
+.toggle{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px}
+.toggle button{border:0;background:none;padding:5px 12px;border-radius:999px;cursor:pointer;font-size:13.5px;color:var(--muted)}
+.toggle button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+
+.inc{color:var(--good)} .exp{color:var(--ink)}
+
+/* Overview */
+.ovhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ovhead h1{font-family:var(--f-display);font-weight:500;font-size:clamp(20px,4.4vw,28px);margin-right:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .k{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.kpi .k i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.kpi .v{font-family:var(--f-num);font-size:22px;letter-spacing:-.02em}
+.kpi .v small{font-family:var(--f-body);font-size:12.5px;color:var(--muted);margin-left:3px;letter-spacing:0}
+.kpi .s{font-size:12px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font-family:var(--f-body);font-size:10.5px}
+.chart .grid-l{stroke:var(--line);stroke-width:1}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--c);vertical-align:middle;margin-right:5px}
+.heat{display:grid;gap:3px;align-items:center}
+.heat .hn{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px}
+.heat .hc{aspect-ratio:1;border-radius:3px;background:var(--surface-2);min-width:0}
+.heat .hc.on{background:var(--c-habit)}
+.heat .hp{font-family:var(--f-num);font-size:12px;color:var(--muted);padding-left:8px;text-align:right}
+.scroll-x{overflow-x:auto}
+
+.hbar{display:grid;grid-template-columns:minmax(80px,140px) 1fr auto;gap:10px;align-items:center;font-size:13.5px}
+.hbar .track{height:10px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.hbar .fill{height:100%;background:var(--c-money);border-radius:999px}
+.bars-list{display:flex;flex-direction:column;gap:9px}
+
+/* Tasks */
+.task{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.task:first-child{border-top:0}
+.task .cb{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--muted);background:none;cursor:pointer;flex:none;margin-top:1px;display:grid;place-items:center}
+.task.done .cb{background:var(--c-task);border-color:var(--c-task)}
+.task.done .cb::after{content:"";width:8px;height:4px;border:2px solid var(--surface);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.task .tx{flex:1;min-width:0;overflow-wrap:anywhere}
+.task.done .tx > div:first-child{text-decoration:line-through;color:var(--muted)}
+.tag{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);margin-top:3px;margin-right:4px}
+.tag.late{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.tag.today{background:var(--accent-soft);color:var(--accent)}
+
+.banner{font-size:13px;padding:10px 14px;border-radius:var(--r-s);background:var(--surface);border:1px dashed var(--line);color:var(--muted);margin-bottom:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13.5px;z-index:50;max-width:calc(100% - 32px)}
+@media (min-width:721px){.toast{bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
+.loading{padding:60px 0;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.card,.kpi{animation:rise .25s ease both}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="logo">Мой<span>·</span>день</div>
+    <span class="store-pill" id="storePill"></span>
+    <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
+  </div>
+</header>
+<main class="wrap" id="main"><div class="loading">Открываю дневник…</div></main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate()+n); return ymd(d); };
+const today = () => ymd(new Date());
+const rid = () => Math.random().toString(36).slice(2, 10);
+const clone = v => JSON.parse(JSON.stringify(v));
+const nf = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1});
+const nf2 = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2});
+const money = v => nf2.format(Math.round(v*100)/100) + ' ' + S.config.currency;
+const dm = s => { const d = parse(s); return `${d.getDate()}.${pad(d.getMonth()+1)}`; };
+const longDate = s => parse(s).toLocaleDateString('ru-RU', {weekday:'long', day:'numeric', month:'long'});
+const monthName = m => { const [y,mm] = m.split('-').map(Number); return new Date(y, mm-1, 1).toLocaleDateString('ru-RU', {month:'long', year:'numeric'}); };
+const plural = (n, a, b, c) => { const m10 = n%10, m100 = n%100; return m10===1&&m100!==11 ? a : m10>=2&&m10<=4&&(m100<10||m100>=20) ? b : c; };
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+const sum = a => a.reduce((x,y)=>x+(+y||0),0);
+
+const I = {
+  today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  money:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19M16.5 15h2"/></svg>',
+  tasks:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5l2 2 3.5-4M4 15.5l2 2 3.5-4M13 7h7M13 16h7"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
+  sleep:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
+  mood:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1.8 2 5.2 2 7 0M9 9.5h.01M15 9.5h.01"/></svg>',
+  habit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5L9.5 17 4 11.5"/></svg>',
+  sport:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>',
+  study:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
+  health:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M16.5 12.5h2"/></svg>',
+  task:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
+  left:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  right:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+
+const TABS = [['today','Сегодня'],['overview','Обзор'],['money','Финансы'],['tasks','Дела'],['more','Настройки']];
+const EXP_CATS = ['Еда','Кафе','Транспорт','Дом и счета','Здоровье','Одежда','Развлечения','Учёба','Подписки','Подарки','Другое'];
+const INC_CATS = ['Зарплата','Подработка','Стипендия','Подарок','Возврат','Другое'];
+const AREAS = ['Личное','Учёба','Работа','Дом','Здоровье','Финансы'];
+const SPORT_TYPES = ['Бег','Зал','Ходьба','Велосипед','Плавание','Йога','Растяжка','Футбол','Танцы'];
+const DEFAULT_CONFIG = {
+  currency: '₽', waterGoal: 8, sleepGoal: 8,
+  habits: [{id:'h1',name:'Зарядка утром'},{id:'h2',name:'Читать 20 минут'},{id:'h3',name:'Без сладкого'},{id:'h4',name:'Без телефона перед сном'}],
+};
+const SPHERES = [
+  ['sleep','Сон','--c-sleep', d => d.sleep && (d.sleep.hours > 0 || d.sleep.q)],
+  ['mood','Состояние','--c-mood', d => d.mind && (d.mind.mood || d.mind.note)],
+  ['habit','Привычки','--c-habit', d => d.habits && Object.values(d.habits).some(Boolean)],
+  ['sport','Спорт','--c-sport', d => d.sport && d.sport.length],
+  ['study','Учёба','--c-study', d => d.study && d.study.length],
+  ['health','Здоровье','--c-health', d => d.health && Object.values(d.health).some(v => v !== '' && v != null && v !== 0)],
+  ['money','Деньги','--c-money', d => d.money && d.money.length],
+];
+
+/* ---------- state ---------- */
+const S = {
+  mode: 'loading', days: {}, tasks: [], config: clone(DEFAULT_CONFIG),
+  date: today(), tab: 'today', period: 30, month: today().slice(0,7),
+  taskFilter: 'open', moneyKind: 'exp',
+};
+const day = (date = S.date) => (S.days[date] ||= {});
+
+/* ---------- storage ---------- */
+const LS_KEY = 'moi-den.v1';
+const tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+const CS = tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9') ? tg.CloudStorage : null;
+const timers = {}, partsCount = {};
+const cs = (m, ...a) => new Promise((res, rej) => CS[m](...a, (err, v) => err ? rej(err) : res(v)));
+const haptic = () => { try { tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged(); } catch (e) {} };
+
+/* Cloud layout: one key per month of days (m2026-10), plus tasks and config.
+   Telegram limits a value to 4096 chars, so each record is split into parts: key = part count, key_N = part N. */
+function bodyFor(id) {
+  if (id === 'tasks') return {items: S.tasks};
+  if (id === 'config') return S.config;
+  const m = id.slice(1), out = {};
+  for (const [d, v] of Object.entries(S.days)) if (d.startsWith(m) && Object.keys(v).length) out[d] = v;
+  return out;
+}
+function persist(id, delay = 600) {
+  clearTimeout(timers[id]);
+  timers[id] = setTimeout(() => flush(id), delay);
+}
+const dayId = (date = S.date) => 'm' + date.slice(0, 7);
+let chain = Promise.resolve();
+function flush(id) {
+  delete timers[id];
+  saveLocal();
+  if (!CS) return;
+  chain = chain.then(async () => {
+    const str = JSON.stringify(bodyFor(id)), parts = [];
+    for (let i = 0; i < str.length; i += 3800) parts.push(str.slice(i, i + 3800));
+    for (let i = 0; i < parts.length; i++) await cs('setItem', `${id}_${i}`, parts[i]);
+    await cs('setItem', id, String(parts.length));
+    const old = partsCount[id] || 0;
+    if (old > parts.length) await cs('removeItems', Array.from({length: old - parts.length}, (_, k) => `${id}_${parts.length + k}`));
+    partsCount[id] = parts.length;
+  }).catch(() => toast('Не получилось сохранить в Telegram, запись осталась на этом устройстве'));
+}
+function flushAll() {
+  const months = new Set(Object.keys(S.days).map(d => 'm' + d.slice(0, 7)));
+  ['tasks', 'config', ...months].forEach(flush);
+}
+async function getMany(keys) {
+  const out = {};
+  for (let i = 0; i < keys.length; i += 50) Object.assign(out, await cs('getItems', keys.slice(i, i + 50)));
+  return out;
+}
+async function loadCloud() {
+  const keys = await cs('getKeys');
+  const heads = keys.filter(k => /^(tasks|config|m\d{4}-\d{2})$/.test(k));
+  if (!heads.length) return false;
+  const counts = await getMany(heads), partKeys = [];
+  heads.forEach(h => { const n = +counts[h] || 0; partsCount[h] = n; for (let i = 0; i < n; i++) partKeys.push(`${h}_${i}`); });
+  const vals = await getMany(partKeys);
+  for (const h of heads) {
+    let s = ''; for (let i = 0; i < partsCount[h]; i++) s += vals[`${h}_${i}`] || '';
+    let v; try { v = JSON.parse(s); } catch (e) { continue; }
+    if (h === 'tasks') S.tasks = v.items || [];
+    else if (h === 'config') S.config = {...clone(DEFAULT_CONFIG), ...v};
+    else Object.assign(S.days, v);
+  }
+  return true;
+}
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({days:S.days, tasks:S.tasks, config:S.config})); } catch (e) {}
+}
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY); if (!raw) return;
+    const v = JSON.parse(raw);
+    S.days = v.days || {}; S.tasks = v.tasks || []; S.config = {...clone(DEFAULT_CONFIG), ...(v.config || {})};
+  } catch (e) {}
+}
+function applyTheme() {
+  document.documentElement.dataset.theme = tg.colorScheme === 'dark' ? 'dark' : 'light';
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); tg.setBottomBarColor && tg.setBottomBarColor(getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()); } catch (e) {}
+}
+
+async function boot() {
+  const hash = (location.hash || '').slice(1);
+  if (TABS.some(t => t[0] === hash)) S.tab = hash;
+  if (tg) { tg.ready(); tg.expand(); applyTheme(); tg.onEvent('themeChanged', () => { applyTheme(); render(); }); }
+  loadLocal();
+  S.mode = CS ? 'cloud' : 'local';
+  renderStore(); render();
+  if (!CS) return;
+  try {
+    if (await loadCloud()) { saveLocal(); requestRender(); }
+    else if (Object.keys(S.days).length || S.tasks.length) flushAll();
+  } catch (e) { toast('Не удалось загрузить записи из Telegram, показываю сохранённые на устройстве'); }
+}
+
+/* ---------- render plumbing ---------- */
+let pendingRender = false;
+const editing = () => { const a = document.activeElement; return a && $('#main').contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.type !== 'button'; };
+function requestRender() { if (editing()) pendingRender = true; else render(); }
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender && !editing()) { pendingRender = false; render(); } }, 50));
+
+function renderStore() {
+  $('#storePill').textContent = S.mode === 'cloud' ? 'Сохраняется в Telegram' : S.mode === 'local' ? 'Сохраняется на этом устройстве' : '';
+}
+function renderTabs() {
+  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" ${S.tab===k?'aria-current="page"':''}>${I[k]}<span>${l}</span></button>`).join('');
+}
+function render() {
+  if (S.mode === 'loading') return;
+  renderTabs();
+  const views = {today: vToday, overview: vOverview, money: vMoney, tasks: vTasks, more: vMore};
+  $('#main').innerHTML = views[S.tab]();
+}
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------- pieces ---------- */
+const card = (key, title, body, aside = '', cls = '') => {
+  const c = {sleep:'--c-sleep',mood:'--c-mood',habit:'--c-habit',sport:'--c-sport',study:'--c-study',health:'--c-health',wallet:'--c-money',task:'--c-task'}[key];
+  return `<section class="card ${cls}" style="--c:var(${c})"><div class="card-h"><div class="badge">${I[key]}</div><h2>${title}</h2>${aside ? `<div class="aside">${aside}</div>` : ''}</div>${body}</section>`;
+};
+const seg = (path, val, label, hints) => `<div class="seg-wrap"><span><b style="font-weight:500;color:var(--ink)">${label}</b><em style="font-style:normal">${hints}</em></span><div class="seg">${[1,2,3,4,5].map(n => `<button data-act="seg" data-path="${path}" data-val="${n}" class="${val===n?'on':''}" aria-pressed="${val===n}">${n}</button>`).join('')}</div></div>`;
+const get = (obj, path) => path.split('.').reduce((o, k) => o == null ? undefined : o[k], obj);
+function setPath(obj, path, val) {
+  const ks = path.split('.'); let o = obj;
+  for (let i = 0; i < ks.length - 1; i++) o = (o[ks[i]] ||= {});
+  if (val === '' || val == null || Number.isNaN(val)) delete o[ks.at(-1)]; else o[ks.at(-1)] = val;
+}
+function sleepHours(bed, wake) {
+  if (!bed || !wake) return null;
+  const [bh, bm] = bed.split(':').map(Number), [wh, wm] = wake.split(':').map(Number);
+  let m = (wh*60+wm) - (bh*60+bm); if (m <= 0) m += 1440;
+  return Math.round(m/6)/10;
+}
+function streak(hid, from) {
+  let d = from, n = 0;
+  if (!(S.days[d]?.habits?.[hid])) d = addDays(d, -1);
+  while (S.days[d]?.habits?.[hid]) { n++; d = addDays(d, -1); }
+  return n;
+}
+const progressHTML = d => `<div class="progress" id="progress">${SPHERES.map(([k, l, c, f]) => `<span class="dot ${f(d)?'on':''}" style="--c:var(${c})"><i></i>${l}</span>`).join('')}</div>`;
+function refreshMeta() {
+  const p = $('#progress'); if (p) p.outerHTML = progressHTML(day());
+  const sh = $('#sleepHours'); if (sh) { const h = day().sleep?.hours; sh.innerHTML = h ? `${nf.format(h)}<small>ч сна</small>` : `—<small>ч сна</small>`; }
+}
+
+/* ---------- views ---------- */
+function vToday() {
+  const d = day(), date = S.date, isToday = date === today();
+  const sl = d.sleep || {}, mi = d.mind || {}, he = d.health || {};
+  const water = he.water || 0, wg = S.config.waterGoal || 8;
+  const dueTasks = S.tasks.filter(t => !t.done && t.due && t.due <= date).concat(S.tasks.filter(t => t.done && t.doneOn === date));
+  const exp = sum((d.money||[]).filter(m => m.kind==='exp').map(m => m.amt)), inc = sum((d.money||[]).filter(m => m.kind==='inc').map(m => m.amt));
+  const sportMin = sum((d.sport||[]).map(s => s.min)), studyMin = sum((d.study||[]).map(s => s.min));
+  const habitsDone = S.config.habits.filter(h => d.habits?.[h.id]).length;
+
+  return `
+  ${S.mode==='local' ? `<div class="banner">Записи хранятся только на этом устройстве. Открой трекер через бота в Telegram, чтобы они сохранялись в облаке Telegram.</div>` : ''}
+  <div class="dayhead">
+    <h1>${esc(longDate(date))}</h1>
+    <div class="daynav">
+      <button class="iconbtn" data-act="day" data-n="-1" aria-label="Предыдущий день">${I.left}</button>
+      <button class="iconbtn" data-act="day" data-n="1" aria-label="Следующий день">${I.right}</button>
+      ${isToday ? '' : `<button class="btn" data-act="goToday">К сегодня</button>`}
+      <input type="date" id="pickDate" value="${date}" aria-label="Выбрать дату" style="width:auto">
+    </div>
+  </div>
+  ${progressHTML(d)}
+  <div class="grid">
+    ${card('sleep', 'Сон', `
+      <div class="row">
+        <label class="field"><span>Лёг</span><input type="time" id="f-bed" data-f="sleep.bed" value="${esc(sl.bed||'')}"></label>
+        <label class="field"><span>Встал</span><input type="time" id="f-wake" data-f="sleep.wake" value="${esc(sl.wake||'')}"></label>
+        <div class="big" id="sleepHours" style="flex:1 1 90px">${sl.hours ? nf.format(sl.hours) : '—'}<small>ч сна</small></div>
+      </div>
+      ${seg('sleep.q', sl.q, 'Качество сна', '1 разбит · 5 выспался')}
+    `, `цель ${S.config.sleepGoal} ч`)}
+
+    ${card('mood', 'Ментальное состояние', `
+      ${seg('mind.mood', mi.mood, 'Настроение', '1 плохо · 5 отлично')}
+      ${seg('mind.energy', mi.energy, 'Энергия', '1 нет сил · 5 бодрость')}
+      ${seg('mind.stress', mi.stress, 'Тревога и стресс', '1 спокойно · 5 сильно')}
+      <label class="field"><span>Дневник: что было, о чём думаю, за что благодарен</span><textarea id="f-note" data-f="mind.note" rows="3">${esc(mi.note||'')}</textarea></label>
+    `)}
+
+    ${card('habit', 'Привычки', S.config.habits.length ? `
+      <div class="chips">${S.config.habits.map(h => { const on = !!d.habits?.[h.id]; const st = streak(h.id, date); return `<button class="chip ${on?'on':''}" data-act="habit" data-id="${h.id}" aria-pressed="${on}"><span class="box"></span>${esc(h.name)}${st>1?`<small>${st} ${plural(st,'день','дня','дней')} подряд</small>`:''}</button>`; }).join('')}</div>
+    ` : `<p class="empty">Привычек пока нет. Добавь их в разделе «Настройки».</p>`, `${habitsDone} из ${S.config.habits.length}`)}
+
+    ${card('sport', 'Спорт', `
+      ${(d.sport||[]).length ? `<div class="list">${d.sport.map((s,i) => `<div class="li"><span class="t">${esc(s.type)}${s.note?` <span class="muted small">${esc(s.note)}</span>`:''}</span><span class="v">${s.min} мин</span><button class="x" data-act="delItem" data-k="sport" data-i="${i}" aria-label="Удалить">${I.x}</button></div>`).join('')}</div>` : `<p class="empty">Тренировок за день нет. Прогулка тоже считается.</p>`}
+      <form class="row" data-form="sport">
+        <label class="field" style="flex:2 1 140px"><span>Активность</span><input type="text" id="sp-type" list="sportTypes" placeholder="Бег, зал, йога…" required></label>
+        <label class="field" style="flex:1 1 80px"><span>Минут</span><input type="number" id="sp-min" min="1" inputmode="numeric" required></label>
+        <button class="btn primary">Добавить</button>
+      </form>
+      <datalist id="sportTypes">${SPORT_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
+    `, sportMin ? `${sportMin} мин` : '')}
+
+    ${card('study', 'Учёба', `
+      ${(d.study||[]).length ? `<div class="list">${d.study.map((s,i) => `<div class="li"><span class="t">${esc(s.subj)}${s.note?` <span class="muted small">${esc(s.note)}</span>`:''}</span><span class="v">${s.min} мин</span><button class="x" data-act="delItem" data-k="study" data-i="${i}" aria-label="Удалить">${I.x}</button></div>`).join('')}</div>` : `<p class="empty">Занятий за день нет.</p>`}
+      <form class="row" data-form="study">
+        <label class="field" style="flex:2 1 140px"><span>Предмет или тема</span><input type="text" id="st-subj" list="studySubj" placeholder="Английский, курс по Python…" required></label>
+        <label class="field" style="flex:1 1 80px"><span>Минут</span><input type="number" id="st-min" min="1" inputmode="numeric" required></label>
+        <button class="btn primary">Добавить</button>
+      </form>
+      <datalist id="studySubj">${[...new Set(Object.values(S.days).flatMap(x => (x.study||[]).map(s => s.subj)))].slice(0,30).map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+    `, studyMin ? `${studyMin} мин` : '')}
+
+    ${card('health', 'Здоровье', `
+      <div class="row" style="align-items:center">
+        <div class="field" style="flex:1 1 160px"><span>Вода, стаканы по 250 мл</span>
+          <div class="stepper"><button data-act="water" data-n="-1" aria-label="Минус стакан">−</button><span class="big" style="font-size:20px">${water}</span><button data-act="water" data-n="1" aria-label="Плюс стакан">+</button>
+          <div class="glasses">${Array.from({length: Math.max(wg, water)}, (_, i) => `<i class="${i<water?'f':''}"></i>`).join('')}</div></div>
+        </div>
+      </div>
+      <div class="row">
+        <label class="field"><span>Вес, кг</span><input type="number" step="0.1" inputmode="decimal" id="f-weight" data-f="health.weight" data-num value="${he.weight ?? ''}"></label>
+        <label class="field"><span>Шаги</span><input type="number" inputmode="numeric" id="f-steps" data-f="health.steps" data-num value="${he.steps ?? ''}"></label>
+      </div>
+      ${seg('health.feel', he.feel, 'Самочувствие', '1 болею · 5 отлично')}
+      <label class="field"><span>Симптомы, лекарства, врачи</span><input type="text" id="f-symptoms" data-f="health.notes" value="${esc(he.notes||'')}" placeholder="Например: голова болела вечером"></label>
+    `)}
+
+    ${card('wallet', 'Деньги', `
+      ${(d.money||[]).length ? `<div class="list">${d.money.map(m => `<div class="li"><span class="t">${esc(m.cat)}${m.note?` <span class="muted small">${esc(m.note)}</span>`:''}</span><span class="v ${m.kind}">${m.kind==='inc'?'+':'−'}${money(m.amt)}</span><button class="x" data-act="delMoney" data-date="${date}" data-id="${m.id}" aria-label="Удалить">${I.x}</button></div>`).join('')}</div>` : `<p class="empty">Трат и поступлений за день нет.</p>`}
+      ${moneyForm()}
+    `, (exp||inc) ? `−${money(exp)}${inc?` · +${money(inc)}`:''}` : '')}
+
+    ${card('task', 'Дела на день', `
+      ${dueTasks.length ? `<div class="list">${dueTasks.map(taskHTML).join('')}</div>` : `<p class="empty">На этот день дел нет.</p>`}
+      <form class="row" data-form="quickTask">
+        <label class="field" style="flex:3 1 180px"><span>Новое дело на этот день</span><input type="text" id="qt-text" placeholder="Позвонить в поликлинику" required></label>
+        <button class="btn primary">Добавить</button>
+      </form>
+    `, `<a href="#tasks" data-tab="tasks" style="color:var(--accent)">Все дела</a>`)}
+  </div>`;
+}
+
+function moneyForm() {
+  const cats = S.moneyKind === 'exp' ? EXP_CATS : INC_CATS;
+  return `<form class="row" data-form="money">
+    <div class="toggle" role="group" aria-label="Тип"><button type="button" data-act="moneyKind" data-k="exp" class="${S.moneyKind==='exp'?'on':''}">Расход</button><button type="button" data-act="moneyKind" data-k="inc" class="${S.moneyKind==='inc'?'on':''}">Доход</button></div>
+    <label class="field" style="flex:1 1 90px"><span>Сумма, ${esc(S.config.currency)}</span><input type="number" id="m-amt" min="0" step="0.01" inputmode="decimal" required></label>
+    <label class="field" style="flex:1 1 120px"><span>Категория</span><select id="m-cat">${cats.map(c => `<option>${c}</option>`).join('')}</select></label>
+    <label class="field" style="flex:2 1 140px"><span>Комментарий</span><input type="text" id="m-note" placeholder="Необязательно"></label>
+    <button class="btn primary">Записать</button>
+  </form>`;
+}
+
+function taskHTML(t) {
+  const now = today();
+  const late = !t.done && t.due && t.due < now, isT = !t.done && t.due === now;
+  return `<div class="task ${t.done?'done':''}"><button class="cb" data-act="toggleTask" data-id="${t.id}" aria-label="${t.done?'Вернуть в работу':'Отметить выполненным'}"></button>
+    <div class="tx"><div>${esc(t.text)}</div><div>${t.due ? `<span class="tag ${late?'late':isT?'today':''}">${late?'просрочено, ':''}${isT?'сегодня':dm(t.due)}</span>` : ''}${t.area?`<span class="tag">${esc(t.area)}</span>`:''}</div></div>
+    <button class="x" data-act="delTask" data-id="${t.id}" aria-label="Удалить">${I.x}</button></div>`;
+}
+
+/* ---------- charts ---------- */
+function niceMax(m) { if (m <= 0) return 1; const p = 10 ** Math.floor(Math.log10(m)); const r = m / p; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p; }
+const W = 400, H = 170, PL = 32, PR = 6, PT = 10, PB = 22;
+function axes(dates, max, fmt) {
+  const ih = H - PT - PB, iw = W - PL - PR;
+  let s = '';
+  for (const f of [0, .5, 1]) { const y = PT + ih * (1 - f); s += `<line class="grid-l" x1="${PL}" x2="${W-PR}" y1="${y}" y2="${y}"/><text x="${PL-6}" y="${y+4}" text-anchor="end">${fmt(max*f)}</text>`; }
+  const n = dates.length, k = Math.ceil(n / 7);
+  dates.forEach((d, i) => { if ((n - 1 - i) % k === 0) s += `<text x="${PL + iw*(i+.5)/n}" y="${H-6}" text-anchor="middle">${dm(d)}</text>`; });
+  return s;
+}
+function barChart(dates, vals, color, {ref, fmt = v => nf.format(v), max, floor = 1} = {}) {
+  const top = max || niceMax(Math.max(floor, ref || 0, ...vals.map(v => v || 0)));
+  const ih = H - PT - PB, iw = W - PL - PR, n = dates.length, bw = Math.max(2, iw / n * .68);
+  let s = axes(dates, top, fmt);
+  vals.forEach((v, i) => { if (!v) return; const h = ih * Math.min(v, top) / top; s += `<rect x="${PL + iw*(i+.5)/n - bw/2}" y="${PT + ih - h}" width="${bw}" height="${h}" rx="${Math.min(3, bw/3)}" fill="${color}" opacity="${i===n-1?1:.78}"><title>${dm(dates[i])}: ${fmt(v)}</title></rect>`; });
+  if (ref) { const y = PT + ih * (1 - ref / top); s += `<line x1="${PL}" x2="${W-PR}" y1="${y}" y2="${y}" stroke="${color}" stroke-dasharray="4 4" stroke-width="1.2" opacity=".7"/>`; }
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${s}</svg>`;
+}
+function lineChart(dates, series, {min = 0, max, fmt = v => nf.format(v)} = {}) {
+  const all = series.flatMap(s => s.vals.filter(v => v != null));
+  const lo = min ?? Math.min(...all), hi = max ?? Math.max(...all);
+  const ih = H - PT - PB, iw = W - PL - PR, n = dates.length;
+  const X = i => PL + iw*(i+.5)/n, Y = v => PT + ih * (1 - (v - lo) / ((hi - lo) || 1));
+  let s = '';
+  for (const f of [0, .5, 1]) { const y = PT + ih*(1-f); s += `<line class="grid-l" x1="${PL}" x2="${W-PR}" y1="${y}" y2="${y}"/><text x="${PL-6}" y="${y+4}" text-anchor="end">${fmt(lo + (hi-lo)*f)}</text>`; }
+  const k = Math.ceil(n / 7);
+  dates.forEach((d, i) => { if ((n - 1 - i) % k === 0) s += `<text x="${X(i)}" y="${H-6}" text-anchor="middle">${dm(d)}</text>`; });
+  for (const se of series) {
+    const pts = se.vals.map((v, i) => v == null ? null : [X(i), Y(v)]).filter(Boolean);
+    if (!pts.length) continue;
+    s += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="${se.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (n <= 31) pts.forEach(p => s += `<circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="${se.color}"/>`);
+    const last = pts.at(-1); s += `<circle cx="${last[0]}" cy="${last[1]}" r="4.5" fill="${se.color}" stroke="var(--surface)" stroke-width="2"/>`;
+  }
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${s}</svg>`;
+}
+const cssv = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function vOverview() {
+  const n = S.period, end = today();
+  const dates = Array.from({length: n}, (_, i) => addDays(end, i - n + 1));
+  const D = dates.map(d => S.days[d] || {});
+  const sleep = D.map(d => d.sleep?.hours || null);
+  const mood = D.map(d => d.mind?.mood || null), energy = D.map(d => d.mind?.energy || null), stress = D.map(d => d.mind?.stress || null);
+  const sport = D.map(d => sum((d.sport||[]).map(s => s.min)) || null);
+  const study = D.map(d => sum((d.study||[]).map(s => s.min)) || null);
+  const exp = D.map(d => sum((d.money||[]).filter(m => m.kind==='exp').map(m => m.amt)) || null);
+  const inc = D.map(d => sum((d.money||[]).filter(m => m.kind==='inc').map(m => m.amt)));
+  const weight = D.map(d => d.health?.weight || null);
+  const water = D.map(d => d.health?.water || null);
+  const filled = D.filter(d => SPHERES.some(s => s[3](d))).length;
+  const nn = a => a.filter(v => v != null);
+  const habits = S.config.habits;
+  const habitCells = habits.length * n, habitDone = sum(habits.map(h => D.filter(d => d.habits?.[h.id]).length));
+  const sportDays = sport.filter(Boolean).length;
+  const w = nn(weight);
+  const c = k => cssv(k);
+
+  const kpi = (label, color, val, unit, sub) => `<div class="kpi" style="--c:var(${color})"><div class="k"><i></i>${label}</div><div class="v">${val}${unit?`<small>${unit}</small>`:''}</div><div class="s">${sub}</div></div>`;
+  const fmtOr = (v, f = x => nf.format(x)) => v == null ? '—' : f(v);
+  const mins = v => v >= 60 ? `${Math.floor(v/60)} ч ${v%60 ? (v%60)+' мин' : ''}`.trim() : `${v} мин`;
+
+  return `
+  <div class="ovhead"><h1>Обзор</h1>
+    <div class="toggle" role="group" aria-label="Период">${[7,30,90].map(p => `<button data-act="period" data-n="${p}" class="${n===p?'on':''}">${p} дней</button>`).join('')}</div>
+  </div>
+  ${filled === 0 ? `<div class="banner">За последние ${n} ${plural(n,'день','дня','дней')} записей нет. Заполни вкладку «Сегодня», и здесь появятся графики.</div>` : ''}
+  <div class="kpis">
+    ${kpi('Сон в среднем', '--c-sleep', fmtOr(avg(nn(sleep))), 'ч', `цель ${S.config.sleepGoal} ч`)}
+    ${kpi('Настроение', '--c-mood', fmtOr(avg(nn(mood))), 'из 5', `стресс ${fmtOr(avg(nn(stress)))} из 5`)}
+    ${kpi('Привычки', '--c-habit', habitCells ? Math.round(habitDone/habitCells*100) : '—', habitCells ? '%' : '', `${habitDone} ${plural(habitDone,'отметка','отметки','отметок')}`)}
+    ${kpi('Спорт', '--c-sport', mins(sum(nn(sport))), '', `${sportDays} ${plural(sportDays,'день','дня','дней')} с тренировкой`)}
+    ${kpi('Учёба', '--c-study', mins(sum(nn(study))), '', `в среднем ${Math.round(sum(nn(study))/n)} мин в день`)}
+    ${kpi('Расходы', '--c-money', nf.format(Math.round(sum(nn(exp)))), esc(S.config.currency), `доходы ${nf.format(Math.round(sum(inc)))} ${esc(S.config.currency)}`)}
+  </div>
+  <div class="grid">
+    ${card('sleep', 'Сон, часов', barChart(dates, sleep, c('--c-sleep'), {ref: S.config.sleepGoal}), '<span class="small">пунктир — цель</span>')}
+    ${card('mood', 'Состояние, от 1 до 5', `${lineChart(dates, [{vals: mood, color: c('--c-mood')}, {vals: energy, color: c('--c-sport')}, {vals: stress, color: c('--c-health')}], {min: 1, max: 5})}
+      <div class="legend"><span style="--c:var(--c-mood)"><i></i>настроение</span><span style="--c:var(--c-sport)"><i></i>энергия</span><span style="--c:var(--c-health)"><i></i>стресс</span></div>`)}
+    ${card('habit', 'Привычки по дням', habits.length ? `<div class="scroll-x"><div class="heat" style="grid-template-columns:minmax(90px,170px) repeat(${n}, minmax(${n>31?3:8}px, 1fr)) auto;min-width:${n>31?380:300}px">
+      ${habits.map(h => { const cnt = D.filter(d => d.habits?.[h.id]).length; return `<div class="hn" title="${esc(h.name)}">${esc(h.name)}</div>${D.map((d,i) => `<div class="hc ${d.habits?.[h.id]?'on':''}" title="${dm(dates[i])}"></div>`).join('')}<div class="hp">${Math.round(cnt/n*100)}%</div>`; }).join('')}
+      </div></div>` : `<p class="empty">Добавь привычки в настройках.</p>`, '', 'full')}
+    ${card('sport', 'Спорт, минут', barChart(dates, sport, c('--c-sport'), {fmt: v => Math.round(v), floor: 60}))}
+    ${card('study', 'Учёба, минут', barChart(dates, study, c('--c-study'), {fmt: v => Math.round(v), floor: 60}))}
+    ${card('wallet', `Расходы, ${esc(S.config.currency)}`, barChart(dates, exp, c('--c-money'), {fmt: v => v >= 1000 ? nf.format(v/1000)+'к' : Math.round(v), floor: 1000}))}
+    ${card('health', w.length ? 'Вес, кг' : 'Вода, стаканов', w.length
+        ? lineChart(dates, [{vals: weight, color: c('--c-health')}], {min: Math.floor(Math.min(...w) - 1), max: Math.ceil(Math.max(...w) + 1)})
+        : barChart(dates, water, c('--c-health'), {ref: S.config.waterGoal, fmt: v => Math.round(v)}),
+      w.length > 1 ? `${(w.at(-1)-w[0] >= 0 ? '+' : '')}${nf.format(w.at(-1)-w[0])} кг за период` : '')}
+  </div>`;
+}
+
+function vMoney() {
+  const m = S.month;
+  const items = Object.entries(S.days).filter(([d]) => d.startsWith(m)).flatMap(([d, v]) => (v.money||[]).map(x => ({...x, date: d}))).sort((a, b) => b.date.localeCompare(a.date));
+  const exp = items.filter(x => x.kind==='exp'), inc = items.filter(x => x.kind==='inc');
+  const E = sum(exp.map(x => x.amt)), Inc = sum(inc.map(x => x.amt));
+  const byCat = {}; exp.forEach(x => byCat[x.cat] = (byCat[x.cat]||0) + x.amt);
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]), topC = cats[0]?.[1] || 1;
+  const [y, mm] = m.split('-').map(Number), dim = new Date(y, mm, 0).getDate();
+  const isCur = m === today().slice(0,7), passed = isCur ? new Date().getDate() : dim;
+  const groups = {}; items.forEach(x => (groups[x.date] ||= []).push(x));
+  const shift = k => { const d = new Date(y, mm-1+k, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
+
+  return `
+  <div class="ovhead"><h1 style="margin-right:0">Финансы</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <button class="iconbtn" data-act="month" data-m="${shift(-1)}" aria-label="Прошлый месяц">${I.left}</button>
+      <b style="font-weight:600;min-width:120px;text-align:center">${monthName(m)}</b>
+      <button class="iconbtn" data-act="month" data-m="${shift(1)}" aria-label="Следующий месяц">${I.right}</button>
+    </div>
+  </div>
+  <div class="kpis">
+    <div class="kpi" style="--c:var(--good)"><div class="k"><i></i>Доходы</div><div class="v">${money(Inc)}</div><div class="s">${inc.length} ${plural(inc.length,'запись','записи','записей')}</div></div>
+    <div class="kpi" style="--c:var(--c-money)"><div class="k"><i></i>Расходы</div><div class="v">${money(E)}</div><div class="s">в среднем ${money(Math.round(E/Math.max(1,passed)))} в день</div></div>
+    <div class="kpi" style="--c:${Inc-E>=0?'var(--good)':'var(--bad)'}"><div class="k"><i></i>Остаток</div><div class="v" style="color:${Inc-E>=0?'var(--good)':'var(--bad)'}">${Inc-E>=0?'':'−'}${money(Math.abs(Inc-E))}</div><div class="s">доходы минус расходы</div></div>
+    ${isCur ? `<div class="kpi" style="--c:var(--muted)"><div class="k"><i></i>Прогноз расходов</div><div class="v">${money(Math.round(E/Math.max(1,passed)*dim))}</div><div class="s">к концу месяца при том же темпе</div></div>` : ''}
+  </div>
+  <div class="grid">
+    ${card('wallet', 'Расходы по категориям', cats.length ? `<div class="bars-list">${cats.map(([c, v]) => `<div class="hbar"><span>${esc(c)}</span><div class="track"><div class="fill" style="width:${v/topC*100}%"></div></div><span class="num">${money(v)} <span class="muted small">${Math.round(v/E*100)}%</span></span></div>`).join('')}</div>` : `<p class="empty">В этом месяце расходов нет.</p>`)}
+    ${card('wallet', 'Быстрая запись', `<p class="muted small" style="margin:0">Запишется на ${esc(longDate(S.date))}. Дату можно сменить во вкладке «Сегодня».</p>${moneyForm()}`)}
+    ${card('wallet', 'Все операции', items.length ? Object.entries(groups).map(([d, xs]) => `<div><div class="eyebrow" style="margin:6px 0 2px">${esc(longDate(d))}</div><div class="list">${xs.map(x => `<div class="li"><span class="t">${esc(x.cat)}${x.note?` <span class="muted small">${esc(x.note)}</span>`:''}</span><span class="v ${x.kind}">${x.kind==='inc'?'+':'−'}${money(x.amt)}</span><button class="x" data-act="delMoney" data-date="${d}" data-id="${x.id}" aria-label="Удалить">${I.x}</button></div>`).join('')}</div></div>`).join('') : `<p class="empty">Операций нет. Записывай траты во вкладке «Сегодня» или здесь.</p>`, '', 'full')}
+  </div>`;
+}
+
+function vTasks() {
+  const now = today();
+  let list = S.tasks.filter(t => S.taskFilter === 'open' ? !t.done : t.done);
+  list.sort((a, b) => S.taskFilter === 'open' ? (a.due||'9999').localeCompare(b.due||'9999') : (b.doneOn||'').localeCompare(a.doneOn||''));
+  const open = S.tasks.filter(t => !t.done), late = open.filter(t => t.due && t.due < now).length;
+  return `
+  <div class="ovhead"><h1>Дела</h1>
+    <div class="toggle" role="group" aria-label="Фильтр"><button data-act="taskFilter" data-k="open" class="${S.taskFilter==='open'?'on':''}">Активные · ${open.length}</button><button data-act="taskFilter" data-k="done" class="${S.taskFilter==='done'?'on':''}">Сделано · ${S.tasks.length-open.length}</button></div>
+  </div>
+  <div class="grid">
+    ${card('task', 'Новое дело', `
+      <form class="row" data-form="task">
+        <label class="field" style="flex:3 1 220px"><span>Что сделать</span><input type="text" id="t-text" placeholder="Сдать лабораторную по физике" required></label>
+        <label class="field" style="flex:1 1 130px"><span>Срок</span><input type="date" id="t-due"></label>
+        <label class="field" style="flex:1 1 120px"><span>Сфера</span><select id="t-area"><option value="">Без сферы</option>${AREAS.map(a => `<option>${a}</option>`).join('')}</select></label>
+        <button class="btn primary">Добавить</button>
+      </form>`, '', 'full')}
+    ${card('task', S.taskFilter === 'open' ? 'В работе' : 'Выполненные', list.length ? `<div class="list">${list.map(taskHTML).join('')}</div>` : `<p class="empty">${S.taskFilter==='open' ? 'Активных дел нет.' : 'Пока ничего не выполнено.'}</p>`, late ? `<span style="color:var(--bad)">${late} ${plural(late,'просрочено','просрочено','просрочено')}</span>` : '', 'full')}
+  </div>`;
+}
+
+function vMore() {
+  return `
+  <div class="ovhead"><h1>Настройки</h1></div>
+  <div class="grid">
+    ${card('habit', 'Мои привычки', `
+      <div class="list">${S.config.habits.map(h => `<div class="li"><input type="text" id="h-${h.id}" data-hname="${h.id}" value="${esc(h.name)}" aria-label="Название привычки"><button class="x" data-act="delHabit" data-id="${h.id}" aria-label="Удалить привычку">${I.x}</button></div>`).join('') || '<p class="empty">Список пуст.</p>'}</div>
+      <form class="row" data-form="habit"><label class="field" style="flex:3 1 180px"><span>Новая привычка</span><input type="text" id="h-new" placeholder="Медитация 10 минут" required></label><button class="btn primary">Добавить</button></form>
+      <p class="muted small" style="margin:0">Отметки за прошлые дни сохраняются, даже если удалить привычку.</p>
+    `)}
+    ${card('task', 'Цели и валюта', `
+      <div class="row">
+        <label class="field"><span>Валюта</span><select id="cfg-cur" data-cfg="currency">${['₽','$','€','₸','₴','Br','₾','сўм'].map(c => `<option ${S.config.currency===c?'selected':''}>${c}</option>`).join('')}</select></label>
+        <label class="field"><span>Цель сна, ч</span><input type="number" id="cfg-sleep" data-cfg="sleepGoal" data-num min="4" max="12" step="0.5" value="${S.config.sleepGoal}"></label>
+        <label class="field"><span>Цель воды, стаканов</span><input type="number" id="cfg-water" data-cfg="waterGoal" data-num min="1" max="20" value="${S.config.waterGoal}"></label>
+      </div>
+    `)}
+    ${card('task', 'Данные', `
+      <p class="muted small" style="margin:0">${S.mode==='cloud' ? 'Записи хранятся в облаке Telegram, видны только тебе и доступны на всех устройствах с твоим аккаунтом.' : 'Записи хранятся только на этом устройстве.'} Сейчас записано дней: <b class="num">${Object.values(S.days).filter(d => SPHERES.some(s => s[3](d))).length}</b>, дел: <b class="num">${S.tasks.length}</b>.</p>
+      <div class="row"><button class="btn" data-act="export">Скопировать все данные</button><label class="btn" for="importFile" style="cursor:pointer">Загрузить из файла JSON</label><input type="file" id="importFile" accept="application/json,.json" hidden></div>
+      <p class="muted small" style="margin:0">Чтобы перенести записи из трекера в Claude, скачай там JSON во вкладке «Настройки» и загрузи файл сюда. Записи за одинаковые дни заменятся данными из файла.</p>
+    `, '', 'full')}
+  </div>`;
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const tb = e.target.closest('[data-tab]');
+  if (tb) { e.preventDefault(); S.tab = tb.dataset.tab; try { history.replaceState(null, '', '#' + S.tab); } catch (_) {} render(); window.scrollTo(0, 0); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act, d = day();
+  switch (a) {
+    case 'day': S.date = addDays(S.date, +b.dataset.n); break;
+    case 'goToday': S.date = today(); break;
+    case 'seg': { haptic(); const v = +b.dataset.val; setPath(d, b.dataset.path, get(d, b.dataset.path) === v ? null : v); persist(dayId(), 300); break; }
+    case 'habit': { haptic(); d.habits ||= {}; d.habits[b.dataset.id] = !d.habits[b.dataset.id]; if (!d.habits[b.dataset.id]) delete d.habits[b.dataset.id]; persist(dayId(), 300); break; }
+    case 'water': { d.health ||= {}; d.health.water = Math.max(0, (d.health.water||0) + +b.dataset.n); persist(dayId(), 400); break; }
+    case 'delItem': d[b.dataset.k].splice(+b.dataset.i, 1); persist(dayId(), 200); break;
+    case 'delMoney': { const dd = S.days[b.dataset.date]; if (dd?.money) { dd.money = dd.money.filter(m => m.id !== b.dataset.id); persist(dayId(b.dataset.date), 200); } break; }
+    case 'moneyKind': S.moneyKind = b.dataset.k; break;
+    case 'toggleTask': { haptic(); const t = S.tasks.find(t => t.id === b.dataset.id); if (t) { t.done = !t.done; t.doneOn = t.done ? today() : null; persist('tasks', 300); } break; }
+    case 'delTask': S.tasks = S.tasks.filter(t => t.id !== b.dataset.id); persist('tasks', 200); break;
+    case 'taskFilter': S.taskFilter = b.dataset.k; break;
+    case 'period': S.period = +b.dataset.n; break;
+    case 'month': S.month = b.dataset.m; break;
+    case 'delHabit': S.config.habits = S.config.habits.filter(h => h.id !== b.dataset.id); persist('config', 200); break;
+    case 'export': doExport(); return;
+    default: return;
+  }
+  render();
+});
+
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-form]'); if (!f) return;
+  e.preventDefault();
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const d = day();
+  switch (f.dataset.form) {
+    case 'sport': { const min = +v('sp-min'); if (!v('sp-type') || !(min > 0)) return; (d.sport ||= []).push({type: v('sp-type'), min: Math.round(min)}); persist(dayId(), 200); toast('Тренировка записана'); break; }
+    case 'study': { const min = +v('st-min'); if (!v('st-subj') || !(min > 0)) return; (d.study ||= []).push({subj: v('st-subj'), min: Math.round(min)}); persist(dayId(), 200); toast('Занятие записано'); break; }
+    case 'money': { const amt = parseFloat(v('m-amt').replace(',', '.')); if (!(amt > 0)) return; (d.money ||= []).push({id: rid(), kind: S.moneyKind, amt, cat: v('m-cat'), note: v('m-note')}); persist(dayId(), 200); toast(S.moneyKind === 'exp' ? 'Расход записан' : 'Доход записан'); break; }
+    case 'quickTask': { if (!v('qt-text')) return; S.tasks.push({id: rid(), text: v('qt-text'), due: S.date, done: false}); persist('tasks', 200); break; }
+    case 'task': { if (!v('t-text')) return; S.tasks.push({id: rid(), text: v('t-text'), due: v('t-due') || null, area: v('t-area') || null, done: false}); persist('tasks', 200); toast('Дело добавлено'); break; }
+    case 'habit': { haptic(); if (!v('h-new')) return; S.config.habits.push({id: 'h' + rid(), name: v('h-new')}); persist('config', 200); break; }
+  }
+  render();
+  const again = {sport:'sp-type', study:'st-subj', money:'m-amt', quickTask:'qt-text', task:'t-text', habit:'h-new'}[f.dataset.form];
+  if (again) document.getElementById(again)?.focus();
+});
+
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.f) {
+    const d = day(), val = el.dataset.num !== undefined ? (el.value === '' ? null : parseFloat(el.value)) : el.value;
+    setPath(d, el.dataset.f, typeof val === 'string' && !val.trim() ? null : val);
+    if (el.dataset.f.startsWith('sleep.')) { const h = sleepHours(d.sleep?.bed, d.sleep?.wake); setPath(d, 'sleep.hours', h); }
+    persist(dayId(), 700); refreshMeta();
+  } else if (el.dataset.hname) {
+    const h = S.config.habits.find(h => h.id === el.dataset.hname); if (h && el.value.trim()) { h.name = el.value.trim(); persist('config', 800); }
+  } else if (el.dataset.cfg && el.tagName === 'INPUT') {
+    const n = parseFloat(el.value); if (n > 0) { S.config[el.dataset.cfg] = n; persist('config', 800); }
+  }
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.id === 'pickDate' && el.value) { S.date = el.value; render(); }
+  else if (el.dataset.cfg && el.tagName === 'SELECT') { S.config[el.dataset.cfg] = el.value; persist('config', 200); render(); }
+});
+
+async function doExport() {
+  const data = JSON.stringify({exported: new Date().toISOString(), config: S.config, tasks: S.tasks, days: S.days});
+  try { await navigator.clipboard.writeText(data); toast('Данные скопированы, вставь их в заметку или чат'); }
+  catch (e) { toast('Не получилось скопировать'); }
+}
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'importFile' || !e.target.files[0]) return;
+  try {
+    const v = JSON.parse(await e.target.files[0].text());
+    if (!v || typeof v.days !== 'object') throw 0;
+    Object.assign(S.days, v.days);
+    const ids = new Set(S.tasks.map(t => t.id));
+    (v.tasks || []).forEach(t => { if (!ids.has(t.id)) S.tasks.push(t); });
+    if (v.config) S.config = {...S.config, ...v.config};
+    flushAll(); render();
+    toast(`Загружено дней: ${Object.keys(v.days).length}`);
+  } catch (_) { toast('Это не файл выгрузки трекера'); }
+  e.target.value = '';
+});
+
+boot();
+})();
+</script>
+</body>
+</html>
